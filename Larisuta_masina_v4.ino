@@ -39,7 +39,7 @@ struct MotorCommand {
 volatile MotorCommand currentCmd = {0, 0};
 
 // ---------- Safety timeout ----------
-const unsigned long SAFETY_TIMEOUT_MS = 500;  // Stop if no command for 500ms
+const unsigned long SAFETY_TIMEOUT_MS = 150;  // Stop if no command for 150ms (fast response)
 volatile unsigned long lastCommandTime = 0;
 
 // ---------- Motor control functions ----------
@@ -223,7 +223,7 @@ const DEAD_ZONE = 15;  // Pixels from center before registering movement
 let heartbeatInterval = null;
 let lastLeftSpeed = 0;
 let lastRightSpeed = 0;
-const HEARTBEAT_INTERVAL_MS = 100;  // Send updates every 100ms
+const HEARTBEAT_INTERVAL_MS = 50;  // Send updates every 50ms for faster response
 
 function updateJoystick(x, y) {
   // Calculate distance from center
@@ -320,15 +320,18 @@ function returnToCenter() {
   speedDisplay.textContent = '0%';
   speedDisplay.className = '';
 
-  // Stop heartbeat
+  // Stop heartbeat immediately
   stopHeartbeat();
 
   // Store zero speeds
   lastLeftSpeed = 0;
   lastRightSpeed = 0;
 
-  // Critical: Send stop command
+  // CRITICAL: Send multiple stop commands for reliability
+  // Send 3 times with small delays to ensure at least one arrives
   sendCommand(0, 0);
+  setTimeout(() => sendCommand(0, 0), 10);
+  setTimeout(() => sendCommand(0, 0), 20);
 }
 
 function sendCommand(leftSpeed, rightSpeed) {
@@ -449,7 +452,7 @@ void setup() {
   Serial.println("\n=== ESP32 Car with Tuned Joystick ===");
   Serial.println("Motor threshold: 40%");
   Serial.println("PWM range: 180-255");
-  Serial.println("Safety timeout: 500ms (auto-stop enabled)");
+  Serial.println("Safety timeout: 150ms (fast response mode)");
   
   // WiFi Access Point
   WiFi.disconnect(true);
