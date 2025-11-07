@@ -1,5 +1,7 @@
 #include <WiFi.h>
-#include <WebServer.h>
+#include <WiFiManager.h>  // WiFi configuration portal
+#include <ESPmDNS.h>      // mDNS for esp32-car.local
+#include <WebSocketsServer.h>
 
 // ---------- Hardware pins ----------
 #define IN1 21  // Left motor direction A
@@ -11,9 +13,10 @@
 #define ENA 25  // Left motor speed (PWM)
 #define ENB 26  // Right motor speed (PWM)
 
-// Motor reversal flags
-const bool LEFT_MOTOR_REVERSED  = true;
-const bool RIGHT_MOTOR_REVERSED = false;
+// Motor reversal flags - ADJUST THESE IF CAR MOVES WRONG DIRECTION
+// If car vibrates or moves opposite direction, try changing these
+const bool LEFT_MOTOR_REVERSED  = true;   // Set to false if left motor goes backwards when it should go forward
+const bool RIGHT_MOTOR_REVERSED = false;  // Set to true if right motor goes backwards when it should go forward
 
 // PWM settings
 const int PWM_FREQ = 1000;      // 1 kHz
@@ -23,12 +26,12 @@ const int PWM_RESOLUTION = 8;   // 8-bit (0-255)
 const int MIN_SPEED_THRESHOLD = 40;   // Ignore commands below 40%
 const int MIN_PWM_OUTPUT = 180;       // Minimum PWM to overcome friction (70% of 255)
 
-// ---------- WiFi Access Point ----------
-const char* AP_SSID  = "ESP32-Car";
-const char* AP_PASS  = "car12345";
+// ---------- WiFi Configuration ----------
+const char* MDNS_HOSTNAME = "esp32-car";  // Access via esp32-car.local
+const char* AP_CONFIG_NAME = "ESP32-Car-Setup";  // AP name for WiFi configuration
 
-// ---------- Web server ----------
-WebServer server(80);
+// ---------- WebSocket server ----------
+WebSocketsServer webSocket = WebSocketsServer(81);  // WebSocket on port 81
 
 // ---------- Motor state ----------
 struct MotorCommand {
@@ -39,7 +42,7 @@ struct MotorCommand {
 volatile MotorCommand currentCmd = {0, 0};
 
 // ---------- Safety timeout ----------
-const unsigned long SAFETY_TIMEOUT_MS = 150;  // Stop if no command for 150ms (fast response)
+const unsigned long SAFETY_TIMEOUT_MS = 300;  // Stop if no command for 300ms (fast but tolerant)
 volatile unsigned long lastCommandTime = 0;
 
 // ---------- Motor control functions ----------
@@ -132,313 +135,62 @@ void stopMotors() {
   setRightMotor(0);
 }
 
-// ---------- HTTP handlers ----------
-void handleRoot() {
-  const char* html = R"rawliteral(
-<!doctype html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-  <title>ESP32 Car - Joystick</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin: 0;
-      padding: 10px;
-      background: #111;
-      color: #fff;
-      overflow: hidden;
-    }
-    h2 { margin: 10px 0; }
-    #joystickContainer {
-      position: relative;
-      width: 300px;
-      height: 300px;
-      margin: 20px auto;
-      background: #222;
-      border-radius: 50%;
-      border: 3px solid #444;
-      touch-action: none;
-    }
-    #joystick {
-      position: absolute;
-      width: 100px;
-      height: 100px;
-      background: radial-gradient(circle, #0a84ff, #0056b3);
-      border-radius: 50%;
-      top: 100px;
-      left: 100px;
-      box-shadow: 0 4px 20px rgba(10, 132, 255, 0.5);
-      transition: box-shadow 0.1s;
-    }
-    #joystick:active {
-      box-shadow: 0 6px 30px rgba(10, 132, 255, 0.8);
-    }
-    #info {
-      margin-top: 20px;
-      font-size: 14px;
-      color: #aaa;
-    }
-    .status {
-      display: inline-block;
-      margin: 5px 10px;
-    }
-    .active {
-      color: #0a84ff;
-      font-weight: bold;
-    }
-  </style>
-</head>
-<body>
-  <h2>🎮 ESP32 Car</h2>
-  <div id="joystickContainer">
-    <div id="joystick"></div>
-  </div>
-  <div id="info">
-    <div class="status">Direction: <span id="direction">Center</span></div>
-    <div class="status">Speed: <span id="speed">0%</span></div>
-  </div>
+// ---------- WebSocket event handler ----------
+void webSocketEvent(uint8_t clientNum, WStype_t type, uint8_t * payload, size_t length) {
+  switch (type) {
+    case WStype_DISCONNECTED:
+      Serial.printf("[%u] WebSocket disconnected\n", clientNum);
+      // Safety: Stop motors when client disconnects
+      currentCmd.leftSpeed = 0;
+      currentCmd.rightSpeed = 0;
+      stopMotors();
+      break;
 
-<script>
-const container = document.getElementById('joystickContainer');
-const joystick = document.getElementById('joystick');
-const directionDisplay = document.getElementById('direction');
-const speedDisplay = document.getElementById('speed');
+    case WStype_CONNECTED:
+      {
+        IPAddress ip = webSocket.remoteIP(clientNum);
+        Serial.printf("[%u] WebSocket connected from %d.%d.%d.%d\n",
+                      clientNum, ip[0], ip[1], ip[2], ip[3]);
+      }
+      break;
 
-const containerSize = 300;
-const joystickSize = 100;
-const maxDistance = (containerSize - joystickSize) / 2;
-const centerX = maxDistance;
-const centerY = maxDistance;
+    case WStype_TEXT:
+      {
+        // Expected format: "left,right" (e.g., "75,-50")
+        // Optimized parsing: Use char* instead of String to reduce heap fragmentation
+        char* comma = strchr((char*)payload, ',');
 
-let isDragging = false;
-let currentX = centerX;
-let currentY = centerY;
+        if (comma != NULL) {
+          *comma = '\0';  // Split the string at comma
+          int leftSpeed = atoi((char*)payload);
+          int rightSpeed = atoi(comma + 1);
 
-// Increased dead zone for reliable stopping
-const DEAD_ZONE = 15;  // Pixels from center before registering movement
+          // Constrain values
+          leftSpeed = constrain(leftSpeed, -100, 100);
+          rightSpeed = constrain(rightSpeed, -100, 100);
 
-// Heartbeat system for continuous safety updates
-let heartbeatInterval = null;
-let lastLeftSpeed = 0;
-let lastRightSpeed = 0;
-const HEARTBEAT_INTERVAL_MS = 50;  // Send updates every 50ms for faster response
+          // Store command
+          currentCmd.leftSpeed = leftSpeed;
+          currentCmd.rightSpeed = rightSpeed;
 
-function updateJoystick(x, y) {
-  // Calculate distance from center
-  const deltaX = x - centerX;
-  const deltaY = y - centerY;
-  const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-  
-  // Limit to max distance
-  let finalX, finalY;
-  if (distance > maxDistance) {
-    const angle = Math.atan2(deltaY, deltaX);
-    finalX = centerX + maxDistance * Math.cos(angle);
-    finalY = centerY + maxDistance * Math.sin(angle);
-  } else {
-    finalX = x;
-    finalY = y;
+          // Update watchdog timer
+          lastCommandTime = millis();
+
+          // Optional: Send acknowledgment back to client
+          // webSocket.sendTXT(clientNum, "OK");
+        }
+      }
+      break;
+
+    case WStype_BIN:
+    case WStype_ERROR:
+    case WStype_FRAGMENT_TEXT_START:
+    case WStype_FRAGMENT_BIN_START:
+    case WStype_FRAGMENT:
+    case WStype_FRAGMENT_FIN:
+      // Not used in this application
+      break;
   }
-  
-  // Update visual position
-  joystick.style.left = finalX + 'px';
-  joystick.style.top = finalY + 'px';
-  
-  currentX = finalX;
-  currentY = finalY;
-  
-  // Calculate direction and speed
-  const finalDeltaX = finalX - centerX;
-  const finalDeltaY = finalY - centerY;
-  const finalDistance = Math.sqrt(finalDeltaX * finalDeltaX + finalDeltaY * finalDeltaY);
-  const speedPercent = Math.round((finalDistance / maxDistance) * 100);
-  
-  // Determine direction
-  let direction = 'Center';
-  let leftSpeed = 0;
-  let rightSpeed = 0;
-  
-  // Apply dead zone - critical for stopping
-  if (finalDistance > DEAD_ZONE) {
-    const angle = Math.atan2(-finalDeltaY, finalDeltaX) * (180 / Math.PI);
-    
-    // Map joystick position to motor commands
-    if (angle >= -45 && angle < 45) {
-      // Right - spin in place
-      direction = 'Right';
-      leftSpeed = speedPercent;
-      rightSpeed = -speedPercent;
-    } else if (angle >= 45 && angle < 135) {
-      // Forward
-      direction = 'Forward';
-      leftSpeed = speedPercent;
-      rightSpeed = speedPercent;
-    } else if (angle >= -135 && angle < -45) {
-      // Backward
-      direction = 'Backward';
-      leftSpeed = -speedPercent;
-      rightSpeed = -speedPercent;
-    } else {
-      // Left - spin in place
-      direction = 'Left';
-      leftSpeed = -speedPercent;
-      rightSpeed = speedPercent;
-    }
-    
-    // Visual feedback
-    speedDisplay.className = 'active';
-    directionDisplay.className = 'active';
-  } else {
-    // Inside dead zone - force stop
-    leftSpeed = 0;
-    rightSpeed = 0;
-    speedDisplay.className = '';
-    directionDisplay.className = '';
-  }
-  
-  // Update display
-  directionDisplay.textContent = direction;
-  speedDisplay.textContent = speedPercent + '%';
-
-  // Store current speeds (heartbeat will send them)
-  lastLeftSpeed = leftSpeed;
-  lastRightSpeed = rightSpeed;
-
-  // Send immediately for responsiveness
-  sendCommand(leftSpeed, rightSpeed);
-}
-
-function returnToCenter() {
-  joystick.style.left = centerX + 'px';
-  joystick.style.top = centerY + 'px';
-  currentX = centerX;
-  currentY = centerY;
-  directionDisplay.textContent = 'Center';
-  directionDisplay.className = '';
-  speedDisplay.textContent = '0%';
-  speedDisplay.className = '';
-
-  // Stop heartbeat immediately
-  stopHeartbeat();
-
-  // Store zero speeds
-  lastLeftSpeed = 0;
-  lastRightSpeed = 0;
-
-  // CRITICAL: Send multiple stop commands for reliability
-  // Send 3 times with small delays to ensure at least one arrives
-  sendCommand(0, 0);
-  setTimeout(() => sendCommand(0, 0), 10);
-  setTimeout(() => sendCommand(0, 0), 20);
-}
-
-function sendCommand(leftSpeed, rightSpeed) {
-  fetch(`/move?left=${leftSpeed}&right=${rightSpeed}`)
-    .catch(e => console.log('Connection error'));
-}
-
-// Heartbeat functions - ensure continuous safety updates
-function startHeartbeat() {
-  if (heartbeatInterval === null) {
-    heartbeatInterval = setInterval(() => {
-      // Continuously send current command to keep ESP32 watchdog alive
-      sendCommand(lastLeftSpeed, lastRightSpeed);
-    }, HEARTBEAT_INTERVAL_MS);
-  }
-}
-
-function stopHeartbeat() {
-  if (heartbeatInterval !== null) {
-    clearInterval(heartbeatInterval);
-    heartbeatInterval = null;
-  }
-}
-
-// Mouse events
-joystick.addEventListener('mousedown', (e) => {
-  isDragging = true;
-  startHeartbeat();  // Start continuous updates
-  e.preventDefault();
-});
-
-container.addEventListener('mousemove', (e) => {
-  if (!isDragging) return;
-  const rect = container.getBoundingClientRect();
-  const x = e.clientX - rect.left - joystickSize / 2;
-  const y = e.clientY - rect.top - joystickSize / 2;
-  updateJoystick(x, y);
-});
-
-document.addEventListener('mouseup', () => {
-  if (isDragging) {
-    isDragging = false;
-    returnToCenter();
-  }
-});
-
-// Touch events
-joystick.addEventListener('touchstart', (e) => {
-  isDragging = true;
-  startHeartbeat();  // Start continuous updates
-  e.preventDefault();
-});
-
-container.addEventListener('touchmove', (e) => {
-  if (!isDragging) return;
-  e.preventDefault();
-  const touch = e.touches[0];
-  const rect = container.getBoundingClientRect();
-  const x = touch.clientX - rect.left - joystickSize / 2;
-  const y = touch.clientY - rect.top - joystickSize / 2;
-  updateJoystick(x, y);
-});
-
-document.addEventListener('touchend', () => {
-  if (isDragging) {
-    isDragging = false;
-    returnToCenter();
-  }
-});
-
-document.addEventListener('touchcancel', () => {
-  if (isDragging) {
-    isDragging = false;
-    returnToCenter();
-  }
-});
-
-// Initialize
-returnToCenter();
-</script>
-</body>
-</html>
-  )rawliteral";
-  server.send(200, "text/html", html);
-}
-
-void handleMove() {
-  if (!server.hasArg("left") || !server.hasArg("right")) {
-    server.send(400, "text/plain", "Missing parameters");
-    return;
-  }
-
-  int leftSpeed = server.arg("left").toInt();
-  int rightSpeed = server.arg("right").toInt();
-
-  // Constrain values
-  leftSpeed = constrain(leftSpeed, -100, 100);
-  rightSpeed = constrain(rightSpeed, -100, 100);
-
-  // Store as percentage (threshold applied in motor functions)
-  currentCmd.leftSpeed = leftSpeed;
-  currentCmd.rightSpeed = rightSpeed;
-
-  // Update watchdog timer - critical for safety timeout
-  lastCommandTime = millis();
-
-  server.send(200, "text/plain", "OK");
 }
 
 // ---------- Setup ----------
@@ -449,40 +201,72 @@ void setup() {
   // Setup motors
   setupMotors();
   
-  Serial.println("\n=== ESP32 Car with Tuned Joystick ===");
+  Serial.println("\n=== ESP32 Car - Optimized WebSocket Control ===");
   Serial.println("Motor threshold: 40%");
   Serial.println("PWM range: 180-255");
-  Serial.println("Safety timeout: 150ms (fast response mode)");
-  
-  // WiFi Access Point
-  WiFi.disconnect(true);
-  WiFi.mode(WIFI_AP);
-  
-  bool apStarted = WiFi.softAP(AP_SSID, AP_PASS);
-  
-  if (apStarted) {
-    Serial.print("WiFi: ");
-    Serial.println(AP_SSID);
-    Serial.print("Password: ");
-    Serial.println(AP_PASS);
-    Serial.print("URL: http://");
-    Serial.println(WiFi.softAPIP());
+  Serial.println("Safety timeout: 300ms | Heartbeat: 75ms");
+  Serial.println("Control: Full 360-degree analog steering");
+  Serial.println("Memory optimized: No HTTP server, WebSocket only\n");
+
+  // WiFi Configuration using WiFiManager
+  WiFiManager wifiManager;
+
+  // Uncomment to reset saved WiFi credentials (for testing)
+  // wifiManager.resetSettings();
+
+  // Set timeout for configuration portal (3 minutes)
+  wifiManager.setConfigPortalTimeout(180);
+
+  Serial.println("Connecting to WiFi...");
+
+  // Auto-connect to saved WiFi or start configuration portal
+  if (!wifiManager.autoConnect(AP_CONFIG_NAME)) {
+    Serial.println("Failed to connect and timeout reached");
+    Serial.println("Restarting ESP32...");
+    delay(3000);
+    ESP.restart();
   }
-  
-  // HTTP Server
-  server.on("/", handleRoot);
-  server.on("/move", handleMove);
-  server.onNotFound([](){ server.send(404, "text/plain", "Not found"); });
-  
-  server.begin();
-  Serial.println("Ready!\n");
+
+  // Successfully connected to WiFi
+  Serial.println("\nWiFi connected!");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  // Start mDNS service
+  if (MDNS.begin(MDNS_HOSTNAME)) {
+    Serial.print("mDNS started: http://");
+    Serial.print(MDNS_HOSTNAME);
+    Serial.println(".local");
+    Serial.print("WebSocket: ws://");
+    Serial.print(MDNS_HOSTNAME);
+    Serial.println(".local:81");
+
+    // Add service to mDNS-SD
+    MDNS.addService("ws", "tcp", 81);
+  } else {
+    Serial.println("Error starting mDNS");
+  }
+
+  // WebSocket Server
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
+  Serial.println("\nWebSocket server started on port 81");
+
+  Serial.println("\n=== Ready! ===");
+  Serial.println("Open controller.html in your browser");
+  Serial.print("Enter: ");
+  Serial.print(MDNS_HOSTNAME);
+  Serial.println(".local");
+  Serial.print("Or IP: ");
+  Serial.println(WiFi.localIP());
+  Serial.println();
 }
 
 MotorCommand lastCmd = {0, 0};
 bool safetyStopActive = false;
 
 void loop() {
-  server.handleClient();
+  webSocket.loop();  // Handle WebSocket events
 
   // CRITICAL SAFETY FEATURE: Auto-stop if no command received
   unsigned long currentTime = millis();
@@ -506,18 +290,31 @@ void loop() {
   int leftSpeed = currentCmd.leftSpeed;
   int rightSpeed = currentCmd.rightSpeed;
 
+  // CRITICAL: If both speeds are zero, force immediate stop (no caching)
+  if (leftSpeed == 0 && rightSpeed == 0) {
+    if (lastCmd.leftSpeed != 0 || lastCmd.rightSpeed != 0) {
+      stopMotors();  // Immediate hardware stop
+      lastCmd.leftSpeed = 0;
+      lastCmd.rightSpeed = 0;
+      // Serial.println("STOP: Zero command received");
+    }
+  }
   // Apply motor commands only when changed
-  if (lastCmd.leftSpeed != leftSpeed || lastCmd.rightSpeed != rightSpeed) {
-
+  else if (lastCmd.leftSpeed != leftSpeed || lastCmd.rightSpeed != rightSpeed) {
     lastCmd.leftSpeed = leftSpeed;
     lastCmd.rightSpeed = rightSpeed;
 
     setLeftMotor(leftSpeed);
     setRightMotor(rightSpeed);
 
-    // Debug output (uncomment to see values)
-    // Serial.printf("Command: L=%d%% R=%d%%\n", leftSpeed, rightSpeed);
+    // DEBUG: Uncomment next line to see motor commands in Serial Monitor
+    // This helps diagnose vibration or wrong direction issues
+    // Serial.printf("Motors -> Left: %d%% | Right: %d%%\n", leftSpeed, rightSpeed);
   }
 
-  delay(10);
+  delay(5);  // Faster loop for better responsiveness
 }
+
+// Anti-vibration + Auto-brake on direction reversal
+// Features: Dead zone 25px, Min threshold 15%, 80ms brake on forward<->backward reversal
+// Please work
