@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+  <title>ESP32 Car Controller</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      text-align: center;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      color: #fff;
+      overflow: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin: 15px 0;
+      font-weight: 600;
+    }
+
+    /* Connection Panel */
+    #connectionPanel {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 15px;
+      margin: 0 auto 20px;
+      max-width: 500px;
+      width: 100%;
+    }
+
+    #connectionPanel.connected {
+      border-color: #0a84ff;
+      background: rgba(10, 132, 255, 0.1);
+    }
+
+    #connectionPanel.error {
+      border-color: #ff453a;
+      background: rgba(255, 69, 58, 0.1);
+    }
+
+    .connection-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+
+    #ipInput {
+      flex: 1;
+      padding: 10px 15px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+    }
+
+    #ipInput:focus {
+      outline: none;
+      border-color: #0a84ff;
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    button {
+      padding: 10px 20px;
+      background: #0a84ff;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    button:hover {
+      background: #0066cc;
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      background: #444;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #666;
+      animation: pulse 2s infinite;
+    }
+
+    .status-indicator.connected .status-dot {
+      background: #30d158;
+    }
+
+    .status-indicator.connecting .status-dot {
+      background: #ffd60a;
+    }
+
+    .status-indicator.error .status-dot {
+      background: #ff453a;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Joystick Container */
+    #joystickContainer {
+      position: relative;
+      width: 300px;
+      height: 300px;
+      margin: 20px auto;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      touch-action: none;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    #joystick {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      background: radial-gradient(circle, #0a84ff, #0056b3);
+      border-radius: 50%;
+      top: 100px;
+      left: 100px;
+      box-shadow: 0 4px 20px rgba(10, 132, 255, 0.5);
+      transition: box-shadow 0.1s;
+      cursor: grab;
+    }
+
+    #joystick:active {
+      box-shadow: 0 6px 30px rgba(10, 132, 255, 0.8);
+      cursor: grabbing;
+    }
+
+    /* Info Display */
+    #info {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #aaa;
+    }
+
+    .status {
+      display: inline-block;
+      margin: 5px 15px;
+    }
+
+    .active {
+      color: #0a84ff;
+      font-weight: bold;
+    }
+
+    /* Help Text */
+    .help-text {
+      font-size: 12px;
+      color: #888;
+      margin-top: 10px;
+    }
+
+    .help-text a {
+      color: #0a84ff;
+      text-decoration: none;
+    }
+
+    .help-text a:hover {
+      text-decoration: underline;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 400px) {
+      #joystickContainer {
+        width: 250px;
+        height: 250px;
+      }
+
+      #joystick {
+        width: 80px;
+        height: 80px;
+        top: 85px;
+        left: 85px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>🎮 ESP32 Car Controller</h1>
+
+  <!-- Connection Panel -->
+  <div id="connectionPanel">
+    <div class="connection-row">
+      <input type="text" id="ipInput" placeholder="esp32-car.local or 192.168.x.x" value="esp32-car.local">
+      <button id="connectBtn" onclick="connect()">Connect</button>
+    </div>
+    <div class="status-indicator" id="statusIndicator">
+      <span class="status-dot"></span>
+      <span id="statusText">Disconnected</span>
+    </div>
+    <div class="help-text">
+      Try <strong>esp32-car.local</strong> or check your router for the ESP32 IP address
+    </div>
+  </div>
+
+  <!-- Joystick Control -->
+  <div id="joystickContainer">
+    <div id="joystick"></div>
+  </div>
+
+  <!-- Info Display -->
+  <div id="info">
+    <div class="status">Direction: <span id="direction">Center</span></div>
+    <div class="status">Speed: <span id="speed">0%</span></div>
+  </div>
+
+  <script>
+    // ========== WebSocket Connection Management ==========
+    let ws = null;
+    let wsConnected = false;
+    let reconnectTimeout = null;
+    let currentIp = null;
+
+    const statusIndicator = document.getElementById('statusIndicator');
+    const statusText = document.getElementById('statusText');
+    const connectionPanel = document.getElementById('connectionPanel');
+    const connectBtn = document.getElementById('connectBtn');
+    const ipInput = document.getElementById('ipInput');
+
+    // Try to load saved IP from localStorage
+    const savedIp = localStorage.getItem('esp32_ip');
+    if (savedIp) {
+      ipInput.value = savedIp;
+    }
+
+    // Auto-connect on load if we have a saved IP
+    if (savedIp) {
+      setTimeout(() => connect(), 500);
+    }
+
+    function updateStatus(status, message) {
+      statusIndicator.className = 'status-indicator ' + status;
+      statusText.textContent = message;
+      connectionPanel.className = status;
+    }
+
+    function connect() {
+      const ip = ipInput.value.trim();
+      if (!ip) {
+        alert('Please enter ESP32 IP address or hostname');
+        return;
+      }
+
+      // Save IP to localStorage
+      localStorage.setItem('esp32_ip', ip);
+      currentIp = ip;
+
+      connectWebSocket(ip);
+    }
+
+    function connectWebSocket(ip) {
+      // Close existing connection
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+
+      // Clear reconnect timeout
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
+
+      // Determine WebSocket URL
+      let wsUrl;
+      if (ip.includes('://')) {
+        // Full URL provided
+        wsUrl = ip.replace('http://', 'ws://').replace('https://', 'wss://');
+        if (!wsUrl.includes(':81')) {
+          wsUrl += ':81';
+        }
+      } else {
+        // Just hostname or IP
+        wsUrl = `ws://${ip}:81/`;
+      }
+
+      console.log('Connecting to:', wsUrl);
+      updateStatus('connecting', 'Connecting...');
+      connectBtn.disabled = true;
+
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected!');
+        wsConnected = true;
+        updateStatus('connected', `Connected to ${ip}`);
+        connectBtn.textContent = 'Disconnect';
+        connectBtn.disabled = false;
+        connectBtn.onclick = disconnect;
+        ipInput.disabled = true;
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        wsConnected = false;
+        updateStatus('error', 'Disconnected');
+        connectBtn.textContent = 'Connect';
+        connectBtn.disabled = false;
+        connectBtn.onclick = connect;
+        ipInput.disabled = false;
+
+        // Stop motors immediately
+        lastLeftSpeed = 0;
+        lastRightSpeed = 0;
+        stopHeartbeat();
+        returnToCenter();
+
+        // Auto-reconnect after 3 seconds
+        reconnectTimeout = setTimeout(() => {
+          if (currentIp) {
+            console.log('Auto-reconnecting...');
+            connectWebSocket(currentIp);
+          }
+        }, 3000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        updateStatus('error', 'Connection failed');
+      };
+
+      ws.onmessage = (event) => {
+        console.log('Received:', event.data);
+      };
+    }
+
+    function disconnect() {
+      if (ws) {
+        // Send stop commands before disconnecting
+        sendCommand(0, 0);
+        ws.close();
+        ws = null;
+      }
+      currentIp = null;
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
+    }
+
+    function sendCommand(leftSpeed, rightSpeed) {
+      if (ws && wsConnected && ws.readyState === WebSocket.OPEN) {
+        ws.send(`${leftSpeed},${rightSpeed}`);
+      }
+    }
+
+    // ========== Joystick Control ==========
+    const container = document.getElementById('joystickContainer');
+    const joystick = document.getElementById('joystick');
+    const directionDisplay = document.getElementById('direction');
+    const speedDisplay = document.getElementById('speed');
+
+    const containerSize = 300;
+    const joystickSize = 100;
+    const maxDistance = (containerSize - joystickSize) / 2;
+    const centerX = maxDistance;
+    const centerY = maxDistance;
+
+    let isDragging = false;
+    let currentX = centerX;
+    let currentY = centerY;
+
+    const DEAD_ZONE = 25;
+    const MIN_COMMAND_THRESHOLD = 15;
+
+    let heartbeatInterval = null;
+    let lastLeftSpeed = 0;
+    let lastRightSpeed = 0;
+    let lastThrottle = 0;
+    let isReversing = false;
+    const HEARTBEAT_INTERVAL_MS = 75;
+    const REVERSE_BRAKE_TIME_MS = 80;
+
+    function updateJoystick(x, y) {
+      const deltaX = x - centerX;
+      const deltaY = y - centerY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+      let finalX, finalY;
+      if (distance > maxDistance) {
+        const angle = Math.atan2(deltaY, deltaX);
+        finalX = centerX + maxDistance * Math.cos(angle);
+        finalY = centerY + maxDistance * Math.sin(angle);
+      } else {
+        finalX = x;
+        finalY = y;
+      }
+
+      joystick.style.left = finalX + 'px';
+      joystick.style.top = finalY + 'px';
+
+      currentX = finalX;
+      currentY = finalY;
+
+      const finalDeltaX = finalX - centerX;
+      const finalDeltaY = finalY - centerY;
+      const finalDistance = Math.sqrt(finalDeltaX * finalDeltaX + finalDeltaY * finalDeltaY);
+
+      let direction = 'Center';
+      let leftSpeed = 0;
+      let rightSpeed = 0;
+
+      if (finalDistance > DEAD_ZONE) {
+        const throttle = (finalDeltaY / maxDistance) * 100;  // Inverted: up=backward, down=forward
+        const turn = (finalDeltaX / maxDistance) * 100;
+
+        const REVERSAL_THRESHOLD = 30;
+        const throttleReversed = (lastThrottle > REVERSAL_THRESHOLD && throttle < -REVERSAL_THRESHOLD) ||
+                                 (lastThrottle < -REVERSAL_THRESHOLD && throttle > REVERSAL_THRESHOLD);
+
+        if (throttleReversed && !isReversing) {
+          isReversing = true;
+          stopHeartbeat();
+
+          sendCommand(0, 0);
+          sendCommand(0, 0);
+
+          lastLeftSpeed = 0;
+          lastRightSpeed = 0;
+          lastThrottle = 0;
+
+          setTimeout(() => {
+            isReversing = false;
+            lastThrottle = throttle;
+            startHeartbeat();
+          }, REVERSE_BRAKE_TIME_MS);
+
+          return;
+        }
+
+        if (isReversing) {
+          return;
+        }
+
+        lastThrottle = throttle;
+
+        leftSpeed = throttle + turn;
+        rightSpeed = throttle - turn;
+
+        const leftScale = Math.abs(leftSpeed / 100);
+        const rightScale = Math.abs(rightSpeed / 100);
+        const maxScale = Math.max(leftScale, rightScale, 1.0);
+
+        leftSpeed = Math.round(leftSpeed / maxScale);
+        rightSpeed = Math.round(rightSpeed / maxScale);
+
+        leftSpeed = Math.max(-100, Math.min(100, leftSpeed));
+        rightSpeed = Math.max(-100, Math.min(100, rightSpeed));
+
+        if (Math.abs(leftSpeed) < MIN_COMMAND_THRESHOLD) leftSpeed = 0;
+        if (Math.abs(rightSpeed) < MIN_COMMAND_THRESHOLD) rightSpeed = 0;
+
+        const speedPercent = Math.round((finalDistance / maxDistance) * 100);
+        if (Math.abs(throttle) > Math.abs(turn)) {
+          direction = throttle > 0 ? 'Forward' : 'Backward';
+          if (Math.abs(turn) > 20) {
+            direction += turn > 0 ? '-Right' : '-Left';
+          }
+        } else {
+          direction = turn > 0 ? 'Right' : 'Left';
+          if (Math.abs(throttle) > 20) {
+            direction += throttle > 0 ? '-Fwd' : '-Back';
+          }
+        }
+
+        speedDisplay.className = 'active';
+        directionDisplay.className = 'active';
+        speedDisplay.textContent = speedPercent + '%';
+      } else {
+        leftSpeed = 0;
+        rightSpeed = 0;
+        speedDisplay.className = '';
+        directionDisplay.className = '';
+        speedDisplay.textContent = '0%';
+
+        lastThrottle = 0;
+        isReversing = false;
+      }
+
+      directionDisplay.textContent = direction;
+
+      lastLeftSpeed = leftSpeed;
+      lastRightSpeed = rightSpeed;
+
+      sendCommand(leftSpeed, rightSpeed);
+    }
+
+    function returnToCenter() {
+      joystick.style.left = centerX + 'px';
+      joystick.style.top = centerY + 'px';
+      currentX = centerX;
+      currentY = centerY;
+      directionDisplay.textContent = 'Center';
+      directionDisplay.className = '';
+      speedDisplay.textContent = '0%';
+      speedDisplay.className = '';
+
+      stopHeartbeat();
+
+      lastLeftSpeed = 0;
+      lastRightSpeed = 0;
+      lastThrottle = 0;
+      isReversing = false;
+
+      sendCommand(0, 0);
+      setTimeout(() => sendCommand(0, 0), 5);
+      setTimeout(() => sendCommand(0, 0), 15);
+      setTimeout(() => sendCommand(0, 0), 30);
+      setTimeout(() => sendCommand(0, 0), 50);
+    }
+
+    function startHeartbeat() {
+      if (heartbeatInterval === null) {
+        heartbeatInterval = setInterval(() => {
+          sendCommand(lastLeftSpeed, lastRightSpeed);
+        }, HEARTBEAT_INTERVAL_MS);
+      }
+    }
+
+    function stopHeartbeat() {
+      if (heartbeatInterval !== null) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
+    }
+
+    // Mouse events
+    joystick.addEventListener('mousedown', (e) => {
+      if (!wsConnected) return;
+      isDragging = true;
+      startHeartbeat();
+      e.preventDefault();
+    });
+
+    container.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const rect = container.getBoundingClientRect();
+      const x = e.clientX - rect.left - joystickSize / 2;
+      const y = e.clientY - rect.top - joystickSize / 2;
+      updateJoystick(x, y);
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        returnToCenter();
+      }
+    });
+
+    // Touch events
+    joystick.addEventListener('touchstart', (e) => {
+      if (!wsConnected) return;
+      isDragging = true;
+      startHeartbeat();
+      e.preventDefault();
+    });
+
+    container.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const rect = container.getBoundingClientRect();
+      const x = touch.clientX - rect.left - joystickSize / 2;
+      const y = touch.clientY - rect.top - joystickSize / 2;
+      updateJoystick(x, y);
+    });
+
+    document.addEventListener('touchend', () => {
+      if (isDragging) {
+        isDragging = false;
+        returnToCenter();
+      }
+    });
+
+    document.addEventListener('touchcancel', () => {
+      if (isDragging) {
+        isDragging = false;
+        returnToCenter();
+      }
+    });
+
+    // Allow Enter key to connect
+    ipInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        connect();
+      }
+    });
+
+    // Initialize
+    returnToCenter();
+  </script>
+</body>
+</html>
