@@ -84,13 +84,23 @@ Install via Arduino IDE Library Manager:
 ### Step 3: Open Controller
 
 **Option A - Local File:**
-- Open `controller.html` in your browser
+
+**Method 1 (Easiest):** Double-click `controller.html` in File Explorer
+
+**Method 2:** Copy this path to your browser address bar:
+```
+file:///C:/Users/tudor/OneDrive/Desktop/Larisuta_masina_v4/controller.html
+```
+
+Then:
 - Enter `esp32-car.local` or the IP address shown in Serial Monitor
 - Click "Connect"
 
 **Option B - GitHub Pages (Recommended):**
-- See `SETUP_GUIDE.md` for hosting instructions
-- Access from any device with internet
+- Open: https://tudorbaranai.github.io/Larisuta_masina_v4/controller.html
+- Make sure you're on the same WiFi network as ESP32
+- Enter `esp32-car.local` or the IP address
+- Click "Connect"
 
 📖 **Detailed setup guide:** See `SETUP_GUIDE.md`
 

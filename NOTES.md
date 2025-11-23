@@ -281,9 +281,10 @@ mDNS started: http://esp32-car.local
 WebSocket: ws://esp32-car.local:81
 
 === Ready! ===
-Open controller.html in your browser
-Enter: esp32-car.local
-Or IP: 192.168.1.6
+1. Double-click controller.html (or use full file path)
+2. Enter: esp32-car.local
+   Or IP: 192.168.1.6
+3. Click 'Connect'
 
 SAFETY STOP: No command timeout  ← This is NORMAL (no controller connected yet)
 ```
