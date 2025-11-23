@@ -253,12 +253,13 @@ void setup() {
   Serial.println("\nWebSocket server started on port 81");
 
   Serial.println("\n=== Ready! ===");
-  Serial.println("Open controller.html in your browser");
-  Serial.print("Enter: ");
+  Serial.println("1. Double-click controller.html (or use full file path)");
+  Serial.print("2. Enter: ");
   Serial.print(MDNS_HOSTNAME);
   Serial.println(".local");
-  Serial.print("Or IP: ");
+  Serial.print("   Or IP: ");
   Serial.println(WiFi.localIP());
+  Serial.println("3. Click 'Connect'");
   Serial.println();
 }
 
