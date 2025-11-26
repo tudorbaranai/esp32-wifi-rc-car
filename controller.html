@@ -400,8 +400,11 @@
     let currentX = centerX;
     let currentY = centerY;
 
-    const DEAD_ZONE = 25;
-    const MIN_COMMAND_THRESHOLD = 15;
+    // ========== Joystick Configuration ==========
+    const DEAD_ZONE = 25;              // Pixels from center before movement registers
+    const MIN_COMMAND_THRESHOLD = 15;  // Minimum speed % to send (anti-jitter)
+    const CURVE_STEEPNESS = 2.0;       // Higher = more "straight zone" before turning kicks in
+                                       // 1.0 = linear, 2.0 = smooth curve, 3.0 = very straight-biased
 
     let heartbeatInterval = null;
     let lastLeftSpeed = 0;
@@ -410,6 +413,66 @@
     let isReversing = false;
     const HEARTBEAT_INTERVAL_MS = 75;
     const REVERSE_BRAKE_TIME_MS = 80;
+
+    /**
+     * 360-Degree Analog Joystick Algorithm
+     *
+     * Behavior:
+     * - Forward + slight turn → Car curves (both wheels forward, different speeds)
+     * - Pure left/right → Spin in place (tank steering)
+     * - Smooth transition between curve and spin modes
+     *
+     * The key is using a power curve (turnRatio^CURVE_STEEPNESS) that:
+     * - Keeps differential low for small turn inputs (car goes mostly straight)
+     * - Only increases differential significantly for large turn inputs
+     * - At pure sideways, full spin in place
+     */
+    function calculateMotorSpeeds(throttle, turn, magnitude) {
+      // Calculate turn ratio: how much of input is turning vs forward/back
+      // turnRatio = 0 when going straight, 1 when pure sideways
+      const absThrottle = Math.abs(throttle);
+      const absTurn = Math.abs(turn);
+      const turnRatio = magnitude > 0 ? absTurn / magnitude : 0;
+
+      // Apply power curve to create smooth transition from curve to spin
+      // At turnRatio = 0.3 with steepness 2.0: differential = 0.09 (barely turning)
+      // At turnRatio = 0.7 with steepness 2.0: differential = 0.49 (moderate turn)
+      // At turnRatio = 1.0 with steepness 2.0: differential = 1.0 (full spin)
+      const differential = Math.pow(turnRatio, CURVE_STEEPNESS);
+
+      // Calculate wheel speeds
+      // Outer wheel (when turning) goes full speed
+      // Inner wheel speed = magnitude * (1 - 2*differential)
+      //   At differential = 0: inner = magnitude (straight)
+      //   At differential = 0.5: inner = 0 (pivot around stopped wheel)
+      //   At differential = 1: inner = -magnitude (spin in place)
+      const outerWheelSpeed = magnitude;
+      const innerWheelSpeed = magnitude * (1 - 2 * differential);
+
+      // Assign based on turn direction
+      let leftSpeed, rightSpeed;
+      if (turn >= 0) {
+        // Turning right: right wheel is outer (faster), left wheel is inner (slower)
+        leftSpeed = innerWheelSpeed;
+        rightSpeed = outerWheelSpeed;
+      } else {
+        // Turning left: left wheel is outer (faster), right wheel is inner (slower)
+        leftSpeed = outerWheelSpeed;
+        rightSpeed = innerWheelSpeed;
+      }
+
+      // If going backward, invert both wheel directions
+      if (throttle < 0) {
+        leftSpeed = -leftSpeed;
+        rightSpeed = -rightSpeed;
+      }
+
+      // Round to integers
+      return {
+        left: Math.round(leftSpeed),
+        right: Math.round(rightSpeed)
+      };
+    }
 
     function updateJoystick(x, y) {
       const deltaX = x - centerX;
@@ -441,9 +504,14 @@
       let rightSpeed = 0;
 
       if (finalDistance > DEAD_ZONE) {
-        const throttle = (finalDeltaY / maxDistance) * 100;  // Inverted: up=backward, down=forward
-        const turn = (finalDeltaX / maxDistance) * 100;
+        // Calculate throttle and turn from joystick position
+        // Negative deltaY = pushing up = forward (positive throttle)
+        // Negative deltaX = pushing left = negative turn (inverted for correct direction)
+        const throttle = -(finalDeltaY / maxDistance) * 100;
+        const turn = -(finalDeltaX / maxDistance) * 100;
+        const magnitude = Math.min((finalDistance / maxDistance) * 100, 100);
 
+        // Direction reversal braking (prevents motor fighting when switching forward/backward)
         const REVERSAL_THRESHOLD = 30;
         const throttleReversed = (lastThrottle > REVERSAL_THRESHOLD && throttle < -REVERSAL_THRESHOLD) ||
                                  (lastThrottle < -REVERSAL_THRESHOLD && throttle > REVERSAL_THRESHOLD);
@@ -474,33 +542,37 @@
 
         lastThrottle = throttle;
 
-        leftSpeed = throttle + turn;
-        rightSpeed = throttle - turn;
+        // Calculate motor speeds using 360-degree analog algorithm
+        const speeds = calculateMotorSpeeds(throttle, turn, magnitude);
+        leftSpeed = speeds.left;
+        rightSpeed = speeds.right;
 
-        const leftScale = Math.abs(leftSpeed / 100);
-        const rightScale = Math.abs(rightSpeed / 100);
-        const maxScale = Math.max(leftScale, rightScale, 1.0);
-
-        leftSpeed = Math.round(leftSpeed / maxScale);
-        rightSpeed = Math.round(rightSpeed / maxScale);
-
-        leftSpeed = Math.max(-100, Math.min(100, leftSpeed));
-        rightSpeed = Math.max(-100, Math.min(100, rightSpeed));
-
+        // Apply minimum command threshold (anti-jitter)
         if (Math.abs(leftSpeed) < MIN_COMMAND_THRESHOLD) leftSpeed = 0;
         if (Math.abs(rightSpeed) < MIN_COMMAND_THRESHOLD) rightSpeed = 0;
 
-        const speedPercent = Math.round((finalDistance / maxDistance) * 100);
-        if (Math.abs(throttle) > Math.abs(turn)) {
-          direction = throttle > 0 ? 'Forward' : 'Backward';
-          if (Math.abs(turn) > 20) {
-            direction += turn > 0 ? '-Right' : '-Left';
-          }
+        // Clamp to valid range
+        leftSpeed = Math.max(-100, Math.min(100, leftSpeed));
+        rightSpeed = Math.max(-100, Math.min(100, rightSpeed));
+
+        // Update direction display
+        const speedPercent = Math.round(magnitude);
+        const absThrottle = Math.abs(throttle);
+        const absTurn = Math.abs(turn);
+        const turnRatio = magnitude > 0 ? absTurn / magnitude : 0;
+
+        // Determine display direction based on dominant input
+        if (turnRatio < 0.3) {
+          // Mostly forward/backward
+          direction = throttle >= 0 ? 'Backward' : 'Forward';
+        } else if (turnRatio > 0.85) {
+          // Mostly turning (spin mode)
+          direction = turn > 0 ? 'Spin Left' : 'Spin Right';
         } else {
-          direction = turn > 0 ? 'Right' : 'Left';
-          if (Math.abs(throttle) > 20) {
-            direction += throttle > 0 ? '-Fwd' : '-Back';
-          }
+          // Mixed: curve mode
+          const baseDir = throttle >= 0 ? 'Back' : 'Fwd';
+          const turnDir = turn > 0 ? 'Left' : 'Right';
+          direction = `${baseDir}-${turnDir}`;
         }
 
         speedDisplay.className = 'active';

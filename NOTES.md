@@ -1,6 +1,6 @@
 # ESP32 Car Project - Session Notes for AI Context
 
-**Last Updated:** 2025-01-07
+**Last Updated:** 2025-11-26
 **Project Owner:** Tudor Baranai
 **GitHub:** https://github.com/tudorbaranai/Larisuta_masina_v4
 
@@ -150,16 +150,16 @@ const bool RIGHT_MOTOR_REVERSED = false;
 
 ### Controller Settings (controller.html)
 ```javascript
-// Lines 406-408
-const DEAD_ZONE = 25;  // pixels
-const MIN_COMMAND_THRESHOLD = 15;  // speed %
+// Lines 404-407 - Joystick Configuration
+const DEAD_ZONE = 25;              // Pixels from center before movement registers
+const MIN_COMMAND_THRESHOLD = 15;  // Minimum speed % to send (anti-jitter)
+const CURVE_STEEPNESS = 2.0;       // Controls curve vs spin transition (1.0=linear, 2.0=smooth, 3.0=straight-biased)
 const HEARTBEAT_INTERVAL_MS = 75;  // ms
 const REVERSE_BRAKE_TIME_MS = 80;  // ms
 
-// Line 444 - Joystick Direction
-const throttle = (finalDeltaY / maxDistance) * 100;  // INVERTED (no negative sign)
-// UP = positive throttle = FORWARD
-// DOWN = negative throttle = BACKWARD
+// Lines 510-511 - Joystick Direction (360-degree analog)
+const throttle = -(finalDeltaY / maxDistance) * 100;  // UP = positive = FORWARD
+const turn = -(finalDeltaX / maxDistance) * 100;      // RIGHT = car turns RIGHT
 ```
 
 ### Libraries Required
@@ -183,10 +183,10 @@ const throttle = (finalDeltaY / maxDistance) * 100;  // INVERTED (no negative si
    - Safety timeout working (stops after 300ms no command)
 
 3. **Motor Control:**
-   - Differential steering working
+   - 360-degree analog joystick control (smooth curves + tank spin)
    - PWM control functional
    - Direction reversal braking (80ms brake on fwd<->back change)
-   - Joystick direction correct (forward = forward)
+   - Joystick direction correct (forward = forward, right = right)
 
 4. **Controller Interface:**
    - Loads in browser (local file)
@@ -571,9 +571,10 @@ Future expansions:
 
 ---
 
-## 📝 SESSION CONCLUSIONS
+## 📝 SESSION HISTORY
 
-### What We Accomplished
+### Session 1 (2025-01-07) - WebSocket Architecture
+**What We Accomplished:**
 1. ✅ Researched and explained WebSocket vs alternatives
 2. ✅ Implemented optimized WebSocket-only architecture
 3. ✅ Created external controller with auto-reconnect
@@ -585,21 +586,68 @@ Future expansions:
 9. ✅ Committed and pushed to GitHub
 10. ✅ Diagnosed battery voltage sag issue
 
-### Current State
-- **System:** Fully functional ✓
-- **Performance:** Good (within battery limitations)
-- **User Satisfaction:** Happy with current state
-- **Next Steps:** None planned (user browsing ideas)
+---
 
-### For Next AI Session
-- User has working car, may return with:
-  - Improvement requests (LEDs, sensors, battery monitoring)
-  - Configuration adjustments (speed, thresholds)
-  - Bug reports (unlikely - system stable)
-  - Questions about features/troubleshooting
-- **No active projects in progress**
-- **GitHub Pages not enabled** (use local file)
+### Session 2 (2025-11-26) - 360-Degree Analog Control + Hardware Planning
+
+**Topics Discussed:**
+
+1. **Battery Power Issues:**
+   - User reported car stops after ~1 minute, recovers after 30 seconds rest
+   - Diagnosed as voltage sag from 4x AA batteries (6V) under motor load
+   - L298N has 2V dropout, leaving only ~4V for motors when battery sags
+   - **Solution chosen:** Upgrade to 6x AA battery holder (9V total)
+   - **Batteries recommended:** Duracell/Energizer Alkaline (or Lithium for best performance)
+
+2. **Sensor Ideas Discussed:**
+   - **Ultrasonic (HC-SR04)** - Distance/obstacle detection (~$2-3)
+   - **5-Channel IR Line Tracking (TCRT5000)** - Line following (~$3-5)
+   - **Speed Encoders** - Measure wheel rotations (~$3-5)
+   - **MPU6050** - Accelerometer/gyroscope (~$3-4)
+   - **LEDs** - Headlights, brake lights, underglow (~$2-5)
+   - **Buzzer** - Horn, warnings (~$1-2)
+   - **Battery Voltage Sensor** - Monitor battery level (~$1-2)
+   - User interested in **TCRT5000 5-channel line tracker** for future
+
+3. **360-Degree Analog Joystick Implementation:**
+   - **Problem:** Old controller felt "digital" - car would spin instead of curve when turning
+   - **Solution:** New algorithm using power curve for smooth curve-to-spin transition
+   - **How it works:**
+     - Forward + slight turn → Car curves (both wheels forward, different speeds)
+     - Pure left/right → Spin in place (tank steering)
+     - `CURVE_STEEPNESS = 2.0` controls the transition sensitivity
+   - **New function:** `calculateMotorSpeeds(throttle, turn, magnitude)` in controller.html
+   - Fixed direction inversions (turn and display)
+
+**Code Changes Made:**
+- `controller.html` lines 403-597: Complete joystick algorithm rewrite
+  - Added `CURVE_STEEPNESS` parameter (line 406)
+  - New `calculateMotorSpeeds()` function (lines 430-475)
+  - Inverted turn direction (line 511)
+  - Updated direction display logic (lines 564-575)
+
+**User's Shopping List:**
+- ✅ 6x AA battery holder with wires (~$3)
+- ✅ 6x Duracell/Energizer Alkaline AA batteries (~$5)
+- 🤔 TCRT5000 5-channel line tracking sensor (future)
 
 ---
 
-**END OF NOTES - Last Updated: 2025-01-07**
+## 🎯 CURRENT STATE
+
+- **System:** Fully functional with 360-degree analog control ✓
+- **Performance:** Good (battery upgrade planned)
+- **Joystick:** Smooth curves when turning, spin in place when pushing pure left/right
+- **Next Steps:** User to purchase 6x AA battery holder and batteries
+
+### For Next AI Session
+- User may return with:
+  - Testing results after battery upgrade
+  - Line tracking sensor implementation (TCRT5000)
+  - Other sensor additions (ultrasonic, LEDs, etc.)
+  - Fine-tuning CURVE_STEEPNESS if needed
+- **GitHub Pages:** Not enabled (use local file)
+
+---
+
+**END OF NOTES - Last Updated: 2025-11-26**
