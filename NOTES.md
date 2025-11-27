@@ -650,4 +650,98 @@ Future expansions:
 
 ---
 
-**END OF NOTES - Last Updated: 2025-11-26**
+---
+
+### Session 3 (2025-11-28) - Adding HC-SR04 Ultrasonic Distance Sensor
+
+**Goal:** Add distance sensor on a servo motor for obstacle detection
+
+**Hardware Being Added:**
+- HC-SR04 Ultrasonic Distance Sensor (the one with "2 speakers" - transmitter/receiver)
+- Servo motor (to be added after sensor works)
+
+**Pin Assignment Decided:**
+- **TRIG:** GPIO 13
+- **ECHO:** GPIO 14 (with voltage divider!)
+- **SERVO:** GPIO 4 (for later)
+
+**IMPORTANT - Voltage Divider Required:**
+- HC-SR04 ECHO pin outputs 5V
+- ESP32 GPIOs are 3.3V tolerant only
+- User has 2x 1kΩ resistors
+- Wiring: ECHO → 1kΩ → GPIO14 → 1kΩ → GND
+- This gives 2.5V (borderline but should work)
+
+**Wiring Diagram:**
+```
+HC-SR04                 ESP32-WROOM-32
+───────                 ──────────────
+VCC  ──────────────────  5V (or VIN)
+TRIG ──────────────────  GPIO 13
+ECHO ──┬── 1kΩ ──┬─────  GPIO 14
+       │         │
+      1kΩ
+       │
+      GND
+GND  ──────────────────  GND
+```
+
+**Test Code Created:**
+- New folder: `HC_SR04_Test/HC_SR04_Test.ino`
+- Separate from main car code (Larisuta_masina_v4.ino untouched)
+- Opens Serial Monitor at 115200 baud
+- Displays distance in cm every 100ms
+
+**Current Status:**
+- Test code written and ready to upload
+- User restarting laptop
+- Next step: Upload test code, verify sensor works, then add servo
+
+**Next Steps After Restart:**
+1. Wire HC-SR04 sensor (with voltage divider on ECHO!)
+2. Open `HC_SR04_Test/HC_SR04_Test.ino` in Arduino IDE
+3. Upload to ESP32
+4. Check Serial Monitor for distance readings
+5. Once working, add servo motor on GPIO 4
+6. Integrate into main car code
+
+---
+
+### Session 4 (2025-11-28) - USB Port Detection Issue (UNRESOLVED)
+
+**Problem:** Arduino IDE doesn't detect ESP32 COM port after creating a new project.
+
+**Symptoms:**
+- Device Manager shows "Unknown USB device (device descriptor request failed)"
+- No COM port appears under "Ports (COM & LPT)"
+- ESP32 power LED is on (board receiving power)
+- User reports this has happened before in the past
+
+**Troubleshooting Attempted (all failed):**
+1. ❌ Tried different USB ports (including USB 2.0 and 3.0)
+2. ❌ Uninstalled unknown device and replugged
+3. ❌ Held EN (reset) button while plugging in
+4. ❌ Disabled USB selective suspend in Power Options
+5. ❌ Installed CP210x Universal Windows Driver (said already installed)
+6. ❌ Held BOOT button while plugging in (bootloader mode)
+7. ❌ Held BOOT + EN, released EN first, then BOOT
+
+**Still To Try:**
+- Install CH340 driver (https://www.wch-ic.com/downloads/CH341SER_EXE.html)
+- Try completely different USB cable
+- Test ESP32 on another computer
+- Test with a different ESP32 board
+- Ask user how they fixed it last time (this happened before)
+
+**Likely Cause:**
+- ESP32 stuck in boot loop from problematic code uploaded during "new project"
+- OR USB-to-Serial chip driver issue
+- OR hardware failure on ESP32 USB chip
+
+**USB Cable:** User confirms same cable worked before this issue
+
+**Note for Future:** User has experienced this exact issue in the past - need to find out what fixed it previously.
+
+---
+
+**END OF NOTES - Last Updated: 2025-11-28**
