@@ -744,4 +744,114 @@ GND  ──────────────────  GND
 
 ---
 
+### Session 5 (2025-11-28) - Autonomous Driving Implementation
+
+**Goal:** Create autonomous obstacle avoidance car using HC-SR04 sensor
+
+**What Was Accomplished:**
+
+1. **HC-SR04 Sensor Testing:**
+   - Sensor was wired but initially showed "No echo received"
+   - User had voltage divider wired incorrectly (connected to 5V instead of ECHO)
+   - **Fix:** Connected ECHO directly to GPIO 14 (no voltage divider for now - works but not recommended long-term)
+   - Sensor now reads distances correctly (~3-5cm variation is normal for HC-SR04)
+
+2. **Created Autonomous_drive Project:**
+   - New folder: `Autonomous_drive/Autonomous_drive.ino`
+   - Completely separate from manual WebSocket control code
+   - Standalone autonomous obstacle avoidance
+
+3. **Issues Fixed During Development:**
+
+   **Issue 1: Direction Inverted**
+   - Car went backward when it should go forward
+   - **Fix:** Swapped motor reversal flags for autonomous code:
+     ```cpp
+     const bool LEFT_MOTOR_REVERSED  = false;  // Was true
+     const bool RIGHT_MOTOR_REVERSED = true;   // Was false
+     ```
+   - Note: These are DIFFERENT from manual control code (which uses true/false)
+
+   **Issue 2: Only One Wheel Turning**
+   - During turns, only one wheel moved
+   - **Fix:** Rewrote `turn()` function to explicitly control both motors with same PWM
+
+   **Issue 3: Sensor Not Reading While Motors Running**
+   - Sensor showed 999 (no echo) when motors were on
+   - Cause: Electrical noise from motors interfering with ultrasonic signal
+   - Attempted fix: Pause motors during sensor reading → caused stuttering
+   - **Final solution:** Removed motor pause, sensor works without it (sometimes)
+   - **Note:** This may need hardware fix later (capacitor on sensor power, or separate power)
+
+   **Issue 4: Car Spinning Endlessly When Stuck**
+   - When surrounded by walls (front, left, right), car would spin 4-5 times then stop
+   - **Fix:** Implemented smart escape logic:
+     - After 3 failed turn attempts in same direction → switch to opposite direction
+     - Reverse again before trying other way
+     - Resets counter when path is clear
+
+4. **Final Autonomous Code Settings:**
+   ```cpp
+   // Speed Settings
+   const int AUTONOMOUS_SPEED = 85;      // Forward speed
+   const int TURN_SPEED = 55;            // Turn speed (reduced to save battery)
+   const int REVERSE_SPEED = 50;         // Reverse speed
+   const int MIN_PWM = 180;              // Minimum PWM to move motors
+
+   // Obstacle Avoidance Settings
+   const int OBSTACLE_DISTANCE_CM = 40;  // Trigger distance
+   const int REVERSE_TIME_MS = 500;      // Reverse duration
+   const int TURN_TIME_MS = 400;         // Turn duration
+   const int MAX_TURN_ATTEMPTS = 3;      // Before switching direction
+   ```
+
+5. **State Machine Flow:**
+   ```
+   FORWARD → (obstacle) → STOP → REVERSE → TURN → CHECK
+                                                     ↓
+                                       Clear? → FORWARD
+                                       Blocked? → TURN again
+                                       3x blocked? → REVERSE → TURN OTHER WAY
+   ```
+
+**Current Project Structure:**
+```
+Larisuta_masina_v4/
+├── Larisuta_masina_v4.ino    # Manual WebSocket control
+├── controller.html            # Web joystick controller
+├── HC_SR04_Test/
+│   └── HC_SR04_Test.ino      # Sensor test code
+├── Autonomous_drive/
+│   └── Autonomous_drive.ino  # Autonomous obstacle avoidance
+├── README.md
+├── SETUP_GUIDE.md
+└── NOTES.md
+```
+
+**Hardware Status:**
+- HC-SR04 connected directly to GPIO 14 (NO voltage divider currently)
+- **WARNING:** Running 5V signal into 3.3V GPIO - works but risks long-term damage
+- Proper voltage divider wiring (for future):
+  ```
+  ECHO ────[1kΩ]────┬────[1kΩ]──── GND
+                    │
+                GPIO 14
+  ```
+
+**Known Limitations:**
+- Battery voltage sag still affects performance (user has 6x AA holder on the way)
+- Sensor sometimes doesn't read while motors running (electrical noise)
+- Single sensor = can only see forward, turns are "blind"
+
+**User's Next Steps:**
+- 6x AA battery holder arriving (will improve motor performance)
+- May add servo motor to scan sensor left/right
+- May add more sensors for better obstacle detection
+
+**Servo Motor (Planned for Future):**
+- Pin reserved: GPIO 4
+- Will mount HC-SR04 on servo to scan left/right before deciding turn direction
+
+---
+
 **END OF NOTES - Last Updated: 2025-11-28**
