@@ -401,8 +401,9 @@
     let currentY = centerY;
 
     // ========== Joystick Configuration ==========
-    const DEAD_ZONE = 25;              // Pixels from center before movement registers
-    const MIN_COMMAND_THRESHOLD = 15;  // Minimum speed % to send (anti-jitter)
+    // PROPORTIONAL CONTROL - Linear response from center to edge
+    const DEAD_ZONE = 8;               // Very small dead zone (just to prevent accidental touch)
+    const MIN_COMMAND_THRESHOLD = 5;   // Allow very small values through
     const CURVE_STEEPNESS = 2.0;       // Higher = more "straight zone" before turning kicks in
                                        // 1.0 = linear, 2.0 = smooth curve, 3.0 = very straight-biased
 

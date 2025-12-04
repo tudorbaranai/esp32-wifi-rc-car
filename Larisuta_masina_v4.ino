@@ -22,9 +22,11 @@ const bool RIGHT_MOTOR_REVERSED = false;  // Set to true if right motor goes bac
 const int PWM_FREQ = 1000;      // 1 kHz
 const int PWM_RESOLUTION = 8;   // 8-bit (0-255)
 
-// Motor threshold settings - TUNED FOR YOUR SETUP
-const int MIN_SPEED_THRESHOLD = 40;   // Ignore commands below 40%
-const int MIN_PWM_OUTPUT = 180;       // Minimum PWM to overcome friction (70% of 255)
+// Motor threshold settings - PROPORTIONAL CONTROL (Linear response)
+const int MIN_SPEED_THRESHOLD = 5;    // Start motors almost immediately (5% joystick)
+const int MIN_PWM_OUTPUT = 100;       // Very slow minimum speed
+const int MAX_PWM_OUTPUT = 115;       // Very slow max speed
+                                      // Adjust this value to change top speed
 
 // ---------- WiFi Configuration ----------
 const char* MDNS_HOSTNAME = "esp32-car";  // Access via esp32-car.local
@@ -64,18 +66,18 @@ void setupMotors() {
 // Apply minimum threshold and map to PWM range
 int applyMotorThreshold(int speedPercent) {
   // speedPercent: -100 to +100
-  
+
   int absSpeed = abs(speedPercent);
-  
+
   // Dead zone - stop if below threshold
   if (absSpeed < MIN_SPEED_THRESHOLD) {
     return 0;
   }
-  
-  // Map MIN_SPEED_THRESHOLD-100% to MIN_PWM_OUTPUT-255 PWM
-  // This gives smooth acceleration from minimum working speed to full speed
-  int pwmValue = map(absSpeed, MIN_SPEED_THRESHOLD, 100, MIN_PWM_OUTPUT, 255);
-  
+
+  // Map MIN_SPEED_THRESHOLD-100% to MIN_PWM_OUTPUT-MAX_PWM_OUTPUT
+  // This gives smooth acceleration from very slow to limited max speed
+  int pwmValue = map(absSpeed, MIN_SPEED_THRESHOLD, 100, MIN_PWM_OUTPUT, MAX_PWM_OUTPUT);
+
   // Restore sign
   return (speedPercent > 0) ? pwmValue : -pwmValue;
 }
@@ -201,9 +203,12 @@ void setup() {
   // Setup motors
   setupMotors();
   
-  Serial.println("\n=== ESP32 Car - Optimized WebSocket Control ===");
-  Serial.println("Motor threshold: 40%");
-  Serial.println("PWM range: 180-255");
+  Serial.println("\n=== ESP32 Car - Proportional Control ===");
+  Serial.println("Motor threshold: 5%");
+  Serial.print("PWM range: ");
+  Serial.print(MIN_PWM_OUTPUT);
+  Serial.print("-");
+  Serial.println(MAX_PWM_OUTPUT);
   Serial.println("Safety timeout: 300ms | Heartbeat: 75ms");
   Serial.println("Control: Full 360-degree analog steering");
   Serial.println("Memory optimized: No HTTP server, WebSocket only\n");
@@ -309,7 +314,7 @@ void loop() {
     setRightMotor(rightSpeed);
 
     // DEBUG: Uncomment next line to see motor commands in Serial Monitor
-    // This helps diagnose vibration or wrong direction issues
+    // This helps diagnose vibration or wrong direction issuesc
     // Serial.printf("Motors -> Left: %d%% | Right: %d%%\n", leftSpeed, rightSpeed);
   }
 
