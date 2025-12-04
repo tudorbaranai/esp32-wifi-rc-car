@@ -885,8 +885,8 @@ User requested linear proportional control like a normal RC controller:
 ESP32 (`Larisuta_masina_v4.ino` lines 26-29):
 ```cpp
 const int MIN_SPEED_THRESHOLD = 5;    // Start motors almost immediately (5% joystick)
-const int MIN_PWM_OUTPUT = 80;        // Very slow minimum speed
-const int MAX_PWM_OUTPUT = 110;       // Limited max speed (for small testing space)
+const int MIN_PWM_OUTPUT = 100;       // Very slow minimum speed
+const int MAX_PWM_OUTPUT = 115;       // Limited max speed (for small testing space)
 ```
 
 Controller (`controller.html` lines 405-406):
@@ -897,15 +897,15 @@ const MIN_COMMAND_THRESHOLD = 5;   // Allow very small values through
 
 **How Proportional Control Works:**
 1. Dead zone: Only 8 pixels from center (minimal)
-2. Linear mapping: 5-100% joystick → 80-110 PWM
+2. Linear mapping: 5-100% joystick → 100-115 PWM
 3. Very slow start, limited maximum speed
 4. Smooth proportional response like a real RC controller
 
 **Speed Tuning History:**
 - Started with MAX_PWM = 180 (too fast)
 - Reduced to 130 (still too fast)
-- Reduced to 115 (still too fast)
-- User manually adjusted to 110, MIN_PWM to 80 (final values)
+- Reduced to 115 (still too fast for indoor space)
+- Final values: MIN_PWM = 100, MAX_PWM = 115
 
 **Hardware Status:**
 - Power: 6x AA batteries in series = ~10.2V
