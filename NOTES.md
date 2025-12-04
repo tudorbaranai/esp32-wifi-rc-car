@@ -854,4 +854,64 @@ Larisuta_masina_v4/
 
 ---
 
-**END OF NOTES - Last Updated: 2025-11-28**
+---
+
+### Session 6 (2025-12-04) - Battery Upgrade + Proportional Control
+
+**Battery Upgrade:**
+- User added 2 more AA batteries (6 total, using two 4-AA holders)
+- Initial attempt: Wired in PARALLEL (wrong) - caused beeping, motors didn't move
+- Fix: Wired in SERIES correctly:
+  - RED from 4-holder → BLACK from 2nd 4-holder (twist together)
+  - BLACK from 1st 4-holder → L298N GND
+  - RED from 2nd 4-holder → L298N 12V/VIN
+- Result: 10.2V at L298N terminals (measured)
+- Motors now have much more power (~8V after L298N dropout)
+- Battery health checked: ~1.38V per battery (healthy, not discharged)
+
+**WiFi Reconfiguration Required:**
+- After re-flashing code, WiFi credentials were lost
+- User had to reconnect to "ESP32-Car-Setup" portal and reconfigure home WiFi
+- New IP: 192.168.1.2
+
+**Proportional Control Implementation:**
+User requested linear proportional control like a normal RC controller:
+- Joystick near center = slow speed
+- Joystick at edge = full speed
+- Wheels should start moving almost immediately from center
+
+**Final Configuration (after multiple iterations):**
+
+ESP32 (`Larisuta_masina_v4.ino` lines 26-29):
+```cpp
+const int MIN_SPEED_THRESHOLD = 5;    // Start motors almost immediately (5% joystick)
+const int MIN_PWM_OUTPUT = 80;        // Very slow minimum speed
+const int MAX_PWM_OUTPUT = 110;       // Limited max speed (for small testing space)
+```
+
+Controller (`controller.html` lines 405-406):
+```javascript
+const DEAD_ZONE = 8;               // Very small dead zone
+const MIN_COMMAND_THRESHOLD = 5;   // Allow very small values through
+```
+
+**How Proportional Control Works:**
+1. Dead zone: Only 8 pixels from center (minimal)
+2. Linear mapping: 5-100% joystick → 80-110 PWM
+3. Very slow start, limited maximum speed
+4. Smooth proportional response like a real RC controller
+
+**Speed Tuning History:**
+- Started with MAX_PWM = 180 (too fast)
+- Reduced to 130 (still too fast)
+- Reduced to 115 (still too fast)
+- User manually adjusted to 110, MIN_PWM to 80 (final values)
+
+**Hardware Status:**
+- Power: 6x AA batteries in series = ~10.2V
+- L298N: Getting full voltage, LED brighter
+- Motors: Smooth proportional control, suitable for indoor testing
+
+---
+
+**END OF NOTES - Last Updated: 2025-12-04**
