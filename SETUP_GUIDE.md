@@ -71,35 +71,27 @@ Or IP: 192.168.1.x
 
 **Method 2:** Copy this full path to your browser address bar:
 ```
-file:///C:/Users/<you>/OneDrive/Desktop/Larisuta_masina_v4/controller.html
+file:///C:/path/to/Larisuta_masina_v4/controller.html
 ```
+(replace `C:/path/to` with the folder where you saved the project)
 
 **Then connect:**
 1. Enter `esp32-car.local` in the connection box
 2. Click "Connect"
 
-**Option B: GitHub Pages (Best for Production)**
-1. Open: https://tudorbaranai.github.io/Larisuta_masina_v4/controller.html
+**Option B: Host It Online (Optional)**
+1. Host `controller.html` yourself (see "GitHub Pages Hosting" below)
 2. Make sure you're on the same WiFi network as ESP32
 3. Enter `esp32-car.local` in the connection box
 4. Click "Connect"
 
-**Note:** You can bookmark this URL on your phone for easy access!
+**Note:** You can bookmark your hosted URL on your phone for easy access!
 
 ---
 
 ## 🌐 GitHub Pages Hosting
 
 Host the controller online for easy access from any device!
-
-### ✅ Already Deployed!
-
-Your controller is already live at:
-**https://tudorbaranai.github.io/Larisuta_masina_v4/controller.html**
-
-Just open this URL on your phone and connect! No setup needed.
-
----
 
 ### Setup Your Own GitHub Pages (Optional)
 
@@ -132,7 +124,7 @@ If you want to host your own version:
 
 ### Using the Online Controller:
 
-1. **Open https://tudorbaranai.github.io/Larisuta_masina_v4/controller.html** on your phone/computer
+1. **Open your hosted `controller.html` URL** on your phone/computer
 2. **Make sure you're on the same WiFi network** as the ESP32
 3. **Enter `esp32-car.local`** in the connection box
 4. **Click "Connect"** - You're ready to drive!

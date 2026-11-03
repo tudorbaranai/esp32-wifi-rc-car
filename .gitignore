@@ -21,3 +21,10 @@ desktop.ini
 *.tmp
 *.bak
 *.log
+
+# Claude Code local settings
+.claude/
+
+# Env files
+.env*
+!.env.example
