@@ -28,3 +28,6 @@ desktop.ini
 # Env files
 .env*
 !.env.example
+
+# Personal session notes, kept local
+NOTES.md
