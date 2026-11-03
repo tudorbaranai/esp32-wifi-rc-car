@@ -2,7 +2,7 @@
 
 A two-motor robot car on an ESP32 that I drive from my phone's browser over home Wi-Fi.
 
-<!-- PHOTO: a picture or short clip of the car goes here -->
+![The car: an ESP32 on a breadboard and AA battery packs on a two-wheel chassis](docs/car.jpg)
 
 ## What it does
 
