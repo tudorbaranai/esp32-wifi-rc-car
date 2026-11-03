@@ -1,228 +1,119 @@
-# ESP32 WiFi Controlled Car
+# ESP32 Wi-Fi RC Car
 
-A professional-grade WiFi-controlled robot car using ESP32 with **optimized WebSocket architecture** and web-based joystick interface.
+A two-motor robot car on an ESP32 that I drive from my phone's browser over home Wi-Fi.
 
-## ✨ Key Features
+<!-- PHOTO: a picture or short clip of the car goes here -->
 
-### Network & Communication
-- **WebSocket-Only Architecture** - No HTTP server overhead (~18KB saved)
-- **Station Mode** - Joins your home WiFi (phone keeps internet!)
-- **Auto WiFi Configuration** - WiFiManager portal for easy setup
-- **mDNS Support** - Access via `esp32-car.local` (no IP needed)
-- **Real-time Bidirectional Communication** - WebSocket for ultra-low latency
+## What it does
 
-### Control & Safety
-- **Web-Based Joystick** - Works on any device, no app needed
-- **Differential Steering** - Independent left/right motor control
-- **Safety Timeout** - Automatic stop if connection is lost (300ms)
-- **Direction Reversal Braking** - Prevents motor fighting (80ms brake)
-- **Continuous Heartbeat** - Keeps connection alive (75ms updates)
-- **Dead Zone & Anti-Vibration** - Smooth, precise control
+- **Drive from any browser.** `controller.html` is a single page with an on-screen joystick. It talks to the car over a WebSocket, so there's no app to install, and the phone stays on the home Wi-Fi with internet.
+- **Steer like an RC car.** Push slightly to the side and the car curves; push fully sideways and it spins in place. Speed follows how far you push.
+- **Stop on its own.** If the car hears nothing for 300 ms (phone locked, Wi-Fi drop, browser closed), it stops the motors.
+- **Avoid obstacles (separate sketch).** `Autonomous_drive/` drives forward on its own, backs up and turns when an HC-SR04 sensor sees something closer than 40 cm. If it's still stuck after 3 turns, it tries the other direction.
 
-### Optimization
-- **Memory Optimized** - Reduced flash usage (~42KB vs ~60KB)
-- **Reduced Heap Fragmentation** - char[] parsing instead of String class
-- **Lower Latency** - ~50ms WebSocket vs ~100ms HTTP
-- **95% Bandwidth Reduction** - 9 bytes vs 500 bytes per command
+## How it works
 
-## Hardware Requirements
-
-- ESP32 Development Board
-- L298N Motor Driver Module
-- 2x DC Motors
-- Power supply (suitable for motors and ESP32)
-- Robot car chassis
-
-## Pin Configuration
-
-| Pin | Function |
-|-----|----------|
-| 21  | Left motor direction A (IN1) |
-| 19  | Left motor direction B (IN2) |
-| 18  | Right motor direction A (IN3) |
-| 23  | Right motor direction B (IN4) |
-| 25  | Left motor PWM speed (ENA) |
-| 26  | Right motor PWM speed (ENB) |
-
-## Software Features
-
-### Motor Control
-- **Min Speed Threshold**: 40% (filters small joystick movements)
-- **PWM Range**: 180-255 (optimized to overcome motor friction)
-- **Dead Zone**: 15 pixels around joystick center
-- **Motor Reversal Flags**: Easy correction for wiring differences
-
-### Safety Features
-- **Automatic Safety Timeout**: Motors stop if no command received for 500ms
-- **Continuous Heartbeat System**: Browser sends updates every 100ms while joystick is active
-- **Fail-Safe Design**: Car stops automatically on connection loss or browser crash
-
-## 🚀 Quick Setup
-
-### Required Libraries
-
-Install via Arduino IDE Library Manager:
-- **WiFiManager** by tzapu
-- **WebSockets** by Markus Sattler
-
-### Step 1: Upload Code
-
-1. Open `Larisuta_masina_v4.ino` in Arduino IDE
-2. Select board: **ESP32 Dev Module**
-3. Upload to your ESP32
-
-### Step 2: First-Time WiFi Configuration
-
-1. ESP32 creates hotspot: **`ESP32-Car-Setup`**
-2. Connect your phone/laptop to this network
-3. Configuration portal opens automatically (or go to `192.168.4.1`)
-4. Select your home WiFi and enter password
-5. Click Save - ESP32 restarts and connects
-
-**WiFi credentials are saved!** ESP32 will auto-connect next time.
-
-### Step 3: Open Controller
-
-**Option A - Local File:**
-
-**Method 1 (Easiest):** Double-click `controller.html` in File Explorer
-
-**Method 2:** Copy this path to your browser address bar:
 ```
-file:///C:/path/to/Larisuta_masina_v4/controller.html
-```
-(replace `C:/path/to` with the folder where you saved the project)
-
-Then:
-- Enter `esp32-car.local` or the IP address shown in Serial Monitor
-- Click "Connect"
-
-**Option B - Host It Online (Optional):**
-- Host `controller.html` on GitHub Pages yourself (see SETUP_GUIDE.md) and open that URL
-- Make sure you're on the same WiFi network as ESP32
-- Enter `esp32-car.local` or the IP address
-- Click "Connect"
-
-📖 **Detailed setup guide:** See `SETUP_GUIDE.md`
-
-## Usage
-
-- **Forward**: Push joystick up
-- **Backward**: Push joystick down
-- **Left Turn**: Push joystick left (spin in place)
-- **Right Turn**: Push joystick right (spin in place)
-- **Stop**: Release joystick (automatic return to center)
-
-## ⚙️ Configuration
-
-Key parameters you can adjust in the code:
-
-```cpp
-// Network configuration
-const char* MDNS_HOSTNAME = "esp32-car";           // Line 30: Access via esp32-car.local
-const char* AP_CONFIG_NAME = "ESP32-Car-Setup";    // Line 31: WiFi setup portal name
-
-// Motor thresholds
-const int MIN_SPEED_THRESHOLD = 40;   // Line 26: Minimum speed percentage (40%)
-const int MIN_PWM_OUTPUT = 180;       // Line 27: Minimum PWM value (180/255)
-
-// Safety timeout
-const unsigned long SAFETY_TIMEOUT_MS = 300;  // Line 43: Auto-stop timeout (300ms)
-
-// Motor reversal (if motors spin wrong direction)
-const bool LEFT_MOTOR_REVERSED  = true;   // Line 16
-const bool RIGHT_MOTOR_REVERSED = false;  // Line 17
-
-// Heartbeat (in controller.html JavaScript)
-const HEARTBEAT_INTERVAL_MS = 75;         // WebSocket update rate (75ms)
-const REVERSE_BRAKE_TIME_MS = 80;         // Direction reversal brake (80ms)
+phone browser (controller.html)
+   │  "left,right" every 75 ms, e.g. "75,-50"
+   ▼  WebSocket, port 81
+ESP32 (Remote_drive.ino)
+   │  PWM + direction pins
+   ▼
+L298N motor driver ──► left and right DC motors
 ```
 
-## 🐛 Troubleshooting
+The browser turns the joystick position into a speed for each side (-100 to 100) and sends it 13 times a second while you hold the stick. The ESP32 maps that to PWM and sets the direction pins. The steady stream doubles as a heartbeat: when it stops, the 300 ms timeout kicks in.
 
-**Cannot connect to `esp32-car.local`:**
-- Use IP address instead (check Serial Monitor at 115200 baud)
-- Windows users: Install Bonjour Print Services for mDNS
-- Android users: mDNS may not work - use IP address
+### Why it's built this way
 
-**WebSocket connection fails:**
-- Ensure phone/computer is on the **same WiFi network** as ESP32
-- Check Serial Monitor shows "WebSocket server started on port 81"
-- Try IP address instead of hostname
-- Check firewall settings (allow port 81)
+- **WebSocket instead of HTTP requests.** The first version sent an HTTP request per command. A WebSocket keeps one connection open, so commands arrive steadily, and the ESP32 doesn't have to run a web server at all.
+- **The car joins the home Wi-Fi.** At first the car ran its own hotspot, and my phone lost internet while it was connected to it. Now the car joins the home network through WiFiManager, so no Wi-Fi password is written in the code.
+- **A short brake before reversing.** Going straight from forward to backward made the motors fight each other. The controller now stops for 80 ms first.
+- **More batteries.** With 4 AA cells the car was weak: the L298N loses about 2 V, so the motors got only about 3 V once the batteries sagged. I added two more cells: 6 AA in series across two holders, 10.2 V measured at the driver.
 
-**Car doesn't move:**
-- Check motor power supply (sufficient voltage/current)
-- Verify motor driver connections (pins 21, 19, 18, 23, 25, 26)
-- Test with wheels off ground first
-- Check PWM threshold isn't too high for your motors
+## Hardware
 
-**Car moves in wrong direction:**
-- Adjust `LEFT_MOTOR_REVERSED` and `RIGHT_MOTOR_REVERSED` flags (lines 16-17)
-- Swap motor wires if needed
+| Part | Notes |
+|---|---|
+| ESP32 dev board (ESP32-WROOM-32) | Powered from a USB power bank |
+| L298N motor driver | Motor power from the battery pack |
+| 2 DC motors and a chassis | |
+| 6 AA batteries | Two holders wired in series, about 10 V |
+| HC-SR04 ultrasonic sensor | Only for the obstacle-avoidance sketch |
 
-**WiFi configuration portal doesn't appear:**
-- Uncomment `wifiManager.resetSettings();` in code (line 215)
-- Upload, then comment it out again
-- Connect to `ESP32-Car-Setup` network manually
-- Go to `192.168.4.1` in browser
+The ESP32 and the motors use separate power sources with a **shared ground**.
 
-**Motors vibrate/oscillate:**
-- Increase `MIN_SPEED_THRESHOLD` (currently 40%)
-- Increase dead zone in controller.html
-- Check motor power supply stability
+### Wiring
 
-📖 **More help:** See `SETUP_GUIDE.md` for detailed troubleshooting
+| ESP32 pin | Connects to |
+|---|---|
+| 21 | L298N IN1 (left motor direction A) |
+| 19 | L298N IN2 (left motor direction B) |
+| 18 | L298N IN3 (right motor direction A) |
+| 23 | L298N IN4 (right motor direction B) |
+| 25 | L298N ENA (left motor speed, PWM) |
+| 26 | L298N ENB (right motor speed, PWM) |
+| 13 | HC-SR04 TRIG (obstacle sketch only) |
+| 14 | HC-SR04 ECHO (obstacle sketch only) |
 
-## 📊 Technical Specifications
+## Build your own
 
-| Specification | Value |
-|--------------|-------|
-| **Communication Protocol** | WebSocket (RFC 6455) |
-| **Message Format** | Text: "left,right" (e.g., "75,-50") |
-| **Network Mode** | Station (WiFi client) |
-| **WebSocket Port** | 81 |
-| **mDNS Hostname** | esp32-car.local |
-| **Update Rate** | ~13 Hz (75ms heartbeat) |
-| **Average Latency** | ~50ms |
-| **Safety Timeout** | 300ms |
-| **Direction Reversal Brake** | 80ms |
-| **PWM Frequency** | 1 kHz |
-| **PWM Resolution** | 8-bit (0-255) |
-| **PWM Range** | 180-255 (tuned for friction) |
-| **Dead Zone** | 25 pixels |
-| **Flash Memory** | ~42KB (optimized) |
-| **Heap Memory** | ~10KB |
+1. **Install** the Arduino IDE with ESP32 board support, then two libraries from the Library Manager: **WiFiManager** (tzapu) and **WebSockets** (Markus Sattler).
+2. **Upload** `Remote_drive/Remote_drive.ino` with the board set to **ESP32 Dev Module**.
+3. **Connect it to your Wi-Fi.** On first boot the car opens a hotspot called `ESP32-Car-Setup`. Join it from your phone, pick your home network in the page that opens (or go to `192.168.4.1`), and save. The car remembers it. If nobody configures it within 3 minutes, it restarts and tries again.
+4. **Drive.** Open `controller.html` in a browser on the same network, enter `esp32-car.local` (or the IP address the Serial Monitor prints at 115200 baud) and press Connect.
 
-## 📁 Project Files
+To check the sensor on its own before trying the autonomous sketch, upload `HC_SR04_Test/HC_SR04_Test.ino` and watch the distances in the Serial Monitor.
 
-- `Larisuta_masina_v4.ino` - ESP32 WebSocket server code
-- `controller.html` - Web-based joystick interface
-- `SETUP_GUIDE.md` - Detailed setup and hosting instructions
-- `README.md` - This file
+### Settings you'll probably change
+
+All of these are at the top of `Remote_drive/Remote_drive.ino`:
+
+| Setting | Now | What it does |
+|---|---|---|
+| `LEFT_MOTOR_REVERSED` / `RIGHT_MOTOR_REVERSED` | `true` / `false` | Flip one if a wheel spins the wrong way |
+| `MIN_PWM_OUTPUT` / `MAX_PWM_OUTPUT` | 100 / 115 | Speed range out of 255. Kept low for driving indoors; raise the max for more speed |
+| `SAFETY_TIMEOUT_MS` | 300 | How long without a command before the car stops |
+| `MDNS_HOSTNAME` | `esp32-car` | The `.local` name |
+
+The joystick's dead zone and steering curve are at the top of the script in `controller.html`.
+
+## Troubleshooting
+
+- **`esp32-car.local` doesn't resolve.** Use the IP address from the Serial Monitor. On Android and older Windows, `.local` names often don't work.
+- **Connect fails.** The phone has to be on the same Wi-Fi as the car. Check that the Serial Monitor says `WebSocket server started on port 81`.
+- **A wheel turns the wrong way.** Flip its `_REVERSED` setting, or swap that motor's two wires.
+- **The car barely moves.** Check the batteries first, then raise `MAX_PWM_OUTPUT`. Test with the wheels off the ground.
+- **To set up a different Wi-Fi network,** uncomment `wifiManager.resetSettings();` in `setup()`, upload once, then comment it out again and upload.
+
+## Known limitations
+
+- **No password on the controls.** Anyone on the same Wi-Fi who opens `controller.html` can drive the car, and the setup hotspot is open. That's fine for a toy at home, not for anywhere else.
+- **The two modes are separate sketches.** Switching between remote control and obstacle avoidance means uploading a different program.
+- **Obstacle avoidance works, but not well.** In a dead end with walls on three sides it keeps turning instead of finding the way out. With one sensor pointing forward it also can't see to the sides or behind, so it can back into things.
+- **The L298N wastes a lot of battery** as heat. A MOSFET driver like the TB6612FNG would give the motors more of the voltage.
+
+## Project files
+
+| Path | What it is |
+|---|---|
+| `Remote_drive/` | Remote-control firmware: Wi-Fi, WebSocket server, motor control |
+| `controller.html` | The joystick page you open in a browser |
+| `Autonomous_drive/` | Obstacle-avoidance firmware |
+| `HC_SR04_Test/` | Sensor test sketch |
+| `LICENSE` | MIT license |
+
+## How it came together
+
+- **2 Nov 2025:** first version, controlled over HTTP with a safety stop.
+- **7 Nov:** switched to a WebSocket and home Wi-Fi with WiFiManager.
+- **26 Nov:** 360-degree analog joystick.
+- **28 Nov:** HC-SR04 sensor and the obstacle-avoidance sketch.
+- **4 Dec:** proportional speed, 6 AA batteries and an indoor speed limit.
+
+I built this with Claude Code as a pair programmer; the decisions, wiring and testing are mine.
 
 ## License
 
-Open source - feel free to modify and improve!
-
-## 📜 Version History
-
-- **v5 (2025)** - **OPTIMIZED ARCHITECTURE**
-  - WebSocket-only communication (removed HTTP server)
-  - Station mode with WiFiManager auto-configuration
-  - mDNS support (`esp32-car.local`)
-  - External web controller (GitHub Pages compatible)
-  - Memory optimizations (~18KB flash saved)
-  - Reduced heap fragmentation (char[] instead of String)
-  - Improved latency (~50ms vs ~100ms)
-
-- **v4** - Safety timeout and heartbeat system
-  - Enhanced motor control with tuned thresholds
-  - Web-based joystick interface with touch support
-  - Direction reversal braking
-
----
-
-**Made with ❤️ for robotics enthusiasts**
-
-For detailed setup instructions, see **`SETUP_GUIDE.md`**
+[MIT](LICENSE)
