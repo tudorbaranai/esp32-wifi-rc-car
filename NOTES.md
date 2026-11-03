@@ -26,7 +26,7 @@
 ### Network Setup
 - **Mode:** Station (joins home WiFi via WiFiManager)
 - **mDNS Hostname:** `esp32-car.local`
-- **IP Address:** `192.168.1.6` (last known)
+- **IP Address:** `192.168.1.x` (last known)
 - **WebSocket Port:** `81`
 - **No HTTP Server:** Removed to save memory (~18KB saved)
 
@@ -234,7 +234,7 @@ const turn = -(finalDeltaX / maxDistance) * 100;      // RIGHT = car turns RIGHT
 - ⚠️ Windows: Requires Bonjour Print Services
 - ❌ Android: Many devices don't support mDNS
 
-**Workaround:** Controller accepts IP address (`192.168.1.6`)
+**Workaround:** Controller accepts IP address (`192.168.1.x`)
 
 ### 3. GitHub Pages Not Enabled
 **Status:** User was asked to enable GitHub Pages for easy URL access
@@ -258,8 +258,8 @@ const turn = -(finalDeltaX / maxDistance) * 100;      // RIGHT = car turns RIGHT
 1. Power on ESP32
 2. Wait for WiFi connection (Serial Monitor: "Ready!")
 3. Open `controller.html` in browser
-   - File location: `C:\Users\tudor\OneDrive\Desktop\Larisuta_masina_v4\controller.html`
-4. Enter ESP32 address: `esp32-car.local` or `192.168.1.6`
+   - File location: `C:\path\to\Larisuta_masina_v4\controller.html`
+4. Enter ESP32 address: `esp32-car.local` or `192.168.1.x`
 5. Click "Connect"
 6. Wait for green "Connected" status
 7. Use joystick to drive
@@ -276,14 +276,14 @@ Memory optimized: No HTTP server, WebSocket only
 Connecting to WiFi...
 
 WiFi connected!
-IP address: 192.168.1.6
+IP address: 192.168.1.x
 mDNS started: http://esp32-car.local
 WebSocket: ws://esp32-car.local:81
 
 === Ready! ===
 1. Double-click controller.html (or use full file path)
 2. Enter: esp32-car.local
-   Or IP: 192.168.1.6
+   Or IP: 192.168.1.x
 3. Click 'Connect'
 
 SAFETY STOP: No command timeout  ← This is NORMAL (no controller connected yet)
@@ -300,7 +300,7 @@ SAFETY STOP: No command timeout  ← This is NORMAL (no controller connected yet
 - Will stop appearing once controller connects and sends commands
 
 ### Can't Connect to esp32-car.local
-**Solution:** Use IP address instead (192.168.1.6)
+**Solution:** Use IP address instead (192.168.1.x)
 **Reason:** mDNS not supported on all devices (especially Android)
 
 ### WebSocket Connection Fails
@@ -543,10 +543,10 @@ Larisuta_masina_v4/
 
 ### Access Points
 - **Serial Monitor:** 115200 baud
-- **Controller File:** `C:\Users\tudor\OneDrive\Desktop\Larisuta_masina_v4\controller.html`
+- **Controller File:** `C:\path\to\Larisuta_masina_v4\controller.html`
 - **GitHub Repo:** https://github.com/tudorbaranai/Larisuta_masina_v4
 - **ESP32 mDNS:** `esp32-car.local`
-- **ESP32 IP:** `192.168.1.6` (may change on router reboot)
+- **ESP32 IP:** `192.168.1.x` (may change on router reboot)
 
 ### Important Commands
 ```bash
@@ -872,7 +872,7 @@ Larisuta_masina_v4/
 **WiFi Reconfiguration Required:**
 - After re-flashing code, WiFi credentials were lost
 - User had to reconnect to "ESP32-Car-Setup" portal and reconfigure home WiFi
-- New IP: 192.168.1.2
+- New IP: 192.168.1.x
 
 **Proportional Control Implementation:**
 User requested linear proportional control like a normal RC controller:
