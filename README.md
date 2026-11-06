@@ -13,7 +13,7 @@ A two-motor robot car on an ESP32 that I drive from my phone's browser over home
 
 ## How it works
 
-```
+```text
 phone browser (controller.html)
    │  "left,right" every 75 ms, e.g. "75,-50"
    ▼  WebSocket, port 81
@@ -35,7 +35,7 @@ The browser turns the joystick position into a speed for each side (-100 to 100)
 ## Hardware
 
 | Part | Notes |
-|---|---|
+| --- | --- |
 | ESP32 dev board (ESP32-WROOM-32) | Powered from a USB power bank |
 | L298N motor driver | Motor power from the battery pack |
 | 2 DC motors and a chassis | |
@@ -47,7 +47,7 @@ The ESP32 and the motors use separate power sources with a **shared ground**.
 ### Wiring
 
 | ESP32 pin | Connects to |
-|---|---|
+| --- | --- |
 | 21 | L298N IN1 (left motor direction A) |
 | 19 | L298N IN2 (left motor direction B) |
 | 18 | L298N IN3 (right motor direction A) |
@@ -71,7 +71,7 @@ To check the sensor on its own before trying the autonomous sketch, upload `HC_S
 All of these are at the top of `Remote_drive/Remote_drive.ino`:
 
 | Setting | Now | What it does |
-|---|---|---|
+| --- | --- | --- |
 | `LEFT_MOTOR_REVERSED` / `RIGHT_MOTOR_REVERSED` | `true` / `false` | Flip one if a wheel spins the wrong way |
 | `MIN_PWM_OUTPUT` / `MAX_PWM_OUTPUT` | 100 / 115 | Speed range out of 255. Kept low for driving indoors; raise the max for more speed |
 | `SAFETY_TIMEOUT_MS` | 300 | How long without a command before the car stops |
@@ -97,7 +97,7 @@ The joystick's dead zone and steering curve are at the top of the script in `con
 ## Project files
 
 | Path | What it is |
-|---|---|
+| --- | --- |
 | `Remote_drive/` | Remote-control firmware: Wi-Fi, WebSocket server, motor control |
 | `controller.html` | The joystick page you open in a browser |
 | `Autonomous_drive/` | Obstacle-avoidance firmware |
